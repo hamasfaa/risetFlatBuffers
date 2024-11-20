@@ -1,20 +1,20 @@
 const net = require('net');
 const flatbuffers = require('flatbuffers');
 const turtleSim = require('./turtle_sim').TurtleSim;
+const readline = require('readline');
 
 const client = new net.Socket();
 
-function createTurtleStatus(x, y, theta) {
+function createTurtleStatus(linear, angular) {
     const builder = new flatbuffers.Builder(1024);
 
-    turtleSim.TurtleStatus.startTurtleStatus(builder);
-    turtleSim.TurtleStatus.addX(builder, x);
-    turtleSim.TurtleStatus.addY(builder, y);
-    turtleSim.TurtleStatus.addTheta(builder, theta);
+    turtleSim.ControlCommand.startControlCommand(builder);
+    turtleSim.ControlCommand.addLinearVelocity(builder, linear);
+    turtleSim.ControlCommand.addAngularVelocity(builder, angular);
 
-    const turtleStatus = turtleSim.TurtleStatus.endTurtleStatus(builder);
+    const controlCommand = turtleSim.ControlCommand.endControlCommand(builder);
 
-    builder.finish(turtleStatus);
+    builder.finish(controlCommand);
 
     return builder.asUint8Array();
 }
@@ -32,16 +32,41 @@ client.on('data', (data) => {
         let y = turtleStatus.y();
         let theta = turtleStatus.theta();
 
-        // console.log('Received: ', turtleStatus.x(), turtleStatus.y(), turtleStatus.theta());
         console.log(`[JS] Received from Server: x: ${x}, y: ${y}, theta: ${theta}`);
-
-        let response = createTurtleStatus(x + 1, y + 1, theta + 1);
-        client.write(response);
-        console.log(`[JS] Sending to Server: x: ${x + 1}, y: ${y + 1}, theta: ${theta + 1}`);
-
     }
 });
 
 client.on('close', () => {
     console.log('[JS] Connection closed.');
+});
+
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+rl.on('line', (input) => {
+    let linearVelocity = 0;
+    let angularVelocity = 0;
+
+    switch (input) {
+        case 'w':
+            linearVelocity = 1;
+            break;
+        case 's':
+            linearVelocity = -1;
+            break;
+        case 'a':
+            angularVelocity = 1;
+            break;
+        case 'd':
+            angularVelocity = -1;
+            break;
+        default:
+            console.log('Invalid input. Use w/s for linear and a/d for angular velocity.');
+            return;
+    }
+
+    let response = createTurtleStatus(linearVelocity, angularVelocity);
+    client.write(response);
 });

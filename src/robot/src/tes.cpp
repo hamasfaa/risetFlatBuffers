@@ -20,7 +20,7 @@ int main(int argc, char **argv)
     ros::Subscriber subPose = nh.subscribe<turtlesim::Pose>("turtle1/pose", 1, poseCallback);
     ros::Publisher pubPC2BS = nh.advertise<robot::PC2BS>("pc2bs_topic", 1);
 
-    ros::Rate loop_rate(10); // 10 Hz
+    ros::Rate loop_rate(10);
 
     while (ros::ok())
     {

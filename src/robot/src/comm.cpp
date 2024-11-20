@@ -4,7 +4,6 @@
 #include <fstream>
 #include <netinet/in.h>
 #include <stdio.h>
-#
 #include <sys/socket.h>
 #include <unistd.h>
 #include "robot/PC2BS.h"
@@ -14,6 +13,7 @@
 
 float xTurtle, yTurtle, thetaTurtle;
 int new_socket;
+ros::Publisher pubBS2PC;
 
 void pc2bsCallback(const robot::PC2BS::ConstPtr &msg)
 {
@@ -31,7 +31,7 @@ void sendComm(const ros::TimerEvent &)
     tsb.add_x(xTurtle);
     tsb.add_y(yTurtle);
     tsb.add_theta(thetaTurtle);
-    printf("[C++] Sending: x: %f, y: %f, theta: %f\n", xTurtle, yTurtle, thetaTurtle);
+    // printf("[C++] Sending: x: %f, y: %f, theta: %f\n", xTurtle, yTurtle, thetaTurtle);
     auto ts = tsb.Finish();
 
     builder.Finish(ts);
@@ -51,15 +51,19 @@ void recvComm(const ros::TimerEvent &)
     {
         flatbuffers::Verifier verifier(buffer, bytesReceived);
 
-        if (verifier.VerifyBuffer<TurtleSim::TurtleStatus>(nullptr))
+        if (verifier.VerifyBuffer<TurtleSim::ControlCommand>(nullptr))
         {
-            auto ts = flatbuffers::GetRoot<TurtleSim::TurtleStatus>(buffer);
+            auto cc = flatbuffers::GetRoot<TurtleSim::ControlCommand>(buffer);
 
-            float x = ts->x();
-            float y = ts->y();
-            float theta = ts->theta();
+            float linear_velocity = cc->linear_velocity();
+            float angular_velocity = cc->angular_velocity();
 
-            printf("[C++] Received: x: %f, y: %f, theta: %f\n", x, y, theta);
+            printf("[C++] Received: linear_velocity: %f, angular_velocity: %f\n", linear_velocity, angular_velocity);
+
+            robot::BS2PC msg;
+            msg.linear_velocity = linear_velocity;
+            msg.angular_velocity = angular_velocity;
+            pubBS2PC.publish(msg);
         }
         else
         {
@@ -73,6 +77,7 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "comm");
     ros::NodeHandle nh;
 
+    pubBS2PC = nh.advertise<robot::BS2PC>("bs2pc_topic", 1);
     ros::Subscriber subPC2BS = nh.subscribe<robot::PC2BS>("pc2bs_topic", 1, pc2bsCallback);
 
     int server_fd;
@@ -95,14 +100,6 @@ int main(int argc, char **argv)
     printf("[C++] Client connected.\n");
 
     ros::Timer timer = nh.createTimer(ros::Duration(0.02), sendComm);
-
-    // ros::Rate rate(50);
-    // while (ros::ok())
-    // {
-    //     ros::spinOnce();
-    //     recvComm();
-    //     rate.sleep();
-    // }
     ros::Timer timer2 = nh.createTimer(ros::Duration(0.02), recvComm);
 
     ros::spin();

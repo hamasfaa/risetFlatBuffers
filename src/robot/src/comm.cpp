@@ -12,7 +12,20 @@
 #define PORT 1234
 
 float xTurtle, yTurtle, thetaTurtle;
-int new_socket;
+
+int udp_socket;
+
+// =============================
+// CLIENT
+// =============================
+struct sockaddr_in client_addr;
+socklen_t client_len = sizeof(client_addr);
+
+// =============================
+// SERVER
+// =============================
+struct sockaddr_in server_addr;
+
 ros::Publisher pubBS2PC;
 
 void pc2bsCallback(const robot::PC2BS::ConstPtr &msg)
@@ -39,13 +52,13 @@ void sendComm(const ros::TimerEvent &)
     uint8_t *buf = builder.GetBufferPointer();
     int size = builder.GetSize();
 
-    send(new_socket, buf, size, 0);
+    sendto(udp_socket, buf, size, 0, (struct sockaddr *)&client_addr, client_len);
 }
 
 void recvComm(const ros::TimerEvent &)
 {
     uint8_t buffer[1024];
-    int bytesReceived = recv(new_socket, buffer, sizeof(buffer), MSG_DONTWAIT);
+    int bytesReceived = recvfrom(udp_socket, buffer, sizeof(buffer), MSG_DONTWAIT, (struct sockaddr *)&client_addr, &client_len);
 
     if (bytesReceived > 0)
     {
@@ -80,32 +93,20 @@ int main(int argc, char **argv)
     pubBS2PC = nh.advertise<robot::BS2PC>("bs2pc_topic", 1);
     ros::Subscriber subPC2BS = nh.subscribe<robot::PC2BS>("pc2bs_topic", 1, pc2bsCallback);
 
-    int server_fd;
-    struct sockaddr_in addr;
-    int opt = 1;
-    int addrlen = sizeof(addr);
+    udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
 
-    // =============================
-    // SERVER & CLIENT
-    // =============================
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(PORT);
-    bind(server_fd, (struct sockaddr *)&addr, sizeof(addr));
-    listen(server_fd, 3);
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
 
-    printf("[C++] Waiting for client connection...\n");
-    new_socket = accept(server_fd, (struct sockaddr *)&addr, (socklen_t *)&addrlen);
-    printf("[C++] Client connected.\n");
+    bind(udp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr));
 
     ros::Timer timer = nh.createTimer(ros::Duration(0.02), sendComm);
     ros::Timer timer2 = nh.createTimer(ros::Duration(0.02), recvComm);
 
     ros::spin();
 
-    close(new_socket);
-    close(server_fd);
+    close(udp_socket);
 
     return 0;
 }

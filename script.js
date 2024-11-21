@@ -1,9 +1,11 @@
-const net = require('net');
+const dgram = require('dgram');
 const flatbuffers = require('flatbuffers');
 const turtleSim = require('./turtle_sim').TurtleSim;
 const readline = require('readline');
 
-const client = new net.Socket();
+const PORT = 1234;
+const HOST = '127.0.0.1';
+const client = dgram.createSocket('udp4');
 
 function createTurtleStatus(linear, angular) {
     const builder = new flatbuffers.Builder(1024);
@@ -19,25 +21,20 @@ function createTurtleStatus(linear, angular) {
     return builder.asUint8Array();
 }
 
-client.connect(1234, '127.0.0.1', () => {
-    console.log('[JS] Connected to the server.');
+client.on('message', (msg, rinfo) => {
+    const buf = new flatbuffers.ByteBuffer(new Uint8Array(msg));
+    const turtleStatus = turtleSim.TurtleStatus.getRootAsTurtleStatus(buf);
+
+    let x = turtleStatus.x();
+    let y = turtleStatus.y();
+    let theta = turtleStatus.theta();
+
+    console.log(`[JS] Received from Server: x: ${x}, y: ${y}, theta: ${theta}`);
 });
 
-client.on('data', (data) => {
-    if (data.length > 0) {
-        const buf = new flatbuffers.ByteBuffer(new Uint8Array(data));
-        const turtleStatus = turtleSim.TurtleStatus.getRootAsTurtleStatus(buf);
-
-        let x = turtleStatus.x();
-        let y = turtleStatus.y();
-        let theta = turtleStatus.theta();
-
-        console.log(`[JS] Received from Server: x: ${x}, y: ${y}, theta: ${theta}`);
-    }
-});
-
-client.on('close', () => {
-    console.log('[JS] Connection closed.');
+client.on('error', (err) => {
+    console.error(`[JS] Error: ${err.message}`);
+    client.close();
 });
 
 const rl = readline.createInterface({
@@ -67,6 +64,6 @@ rl.on('line', (input) => {
             return;
     }
 
-    let response = createTurtleStatus(linearVelocity, angularVelocity);
-    client.write(response);
+    const response = createTurtleStatus(linearVelocity, angularVelocity);
+    client.send(response, 0, response.length, PORT, HOST)
 });

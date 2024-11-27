@@ -122,10 +122,10 @@ include_directories(
 include
   ${catkin_INCLUDE_DIRS}
   /home/hamasfa/flatbuffers/include
-  ${LIVE555_DIR}/liveMedia
-  ${LIVE555_DIR}/UsageEnvironment
-  ${LIVE555_DIR}/groupsock
-  ${LIVE555_DIR}/BasicUsageEnvironment
+  # ${LIVE555_DIR}/liveMedia
+  # ${LIVE555_DIR}/UsageEnvironment
+  # ${LIVE555_DIR}/groupsock
+  # ${LIVE555_DIR}/BasicUsageEnvironment
 )
 
 ## Declare a C++ library
@@ -144,7 +144,7 @@ include
 # add_executable(${PROJECT_NAME}_node src/robot_node.cpp)
 add_executable(tes_node src/tes.cpp)
 add_executable(comm_node src/comm.cpp)
-add_executable(555_node src/tes555.cpp)
+# add_executable(555_node src/tes555.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -168,13 +168,13 @@ target_link_libraries(comm_node
   flatbuffers
 )
 
-target_link_libraries(555_node
-  ${catkin_LIBRARIES}
-  ${LIVE555_DIR}/liveMedia/libliveMedia.a
-  ${LIVE555_DIR}/groupsock/libgroupsock.a
-  ${LIVE555_DIR}/UsageEnvironment/libUsageEnvironment.a
-  ${LIVE555_DIR}/BasicUsageEnvironment/libBasicUsageEnvironment.a
-)
+# target_link_libraries(555_node
+#   ${catkin_LIBRARIES}
+#   ${LIVE555_DIR}/liveMedia/libliveMedia.a
+#   ${LIVE555_DIR}/groupsock/libgroupsock.a
+#   ${LIVE555_DIR}/UsageEnvironment/libUsageEnvironment.a
+#   ${LIVE555_DIR}/BasicUsageEnvironment/libBasicUsageEnvironment.a
+# )
 
 
 #############

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(robot)
 
 
-set(LIVE555_DIR /home/hamasfa/Downloads/live)
+# set(LIVE555_DIR /home/hamasfa/Downloads/live)
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
@@ -144,6 +144,7 @@ include
 # add_executable(${PROJECT_NAME}_node src/robot_node.cpp)
 add_executable(tes_node src/tes.cpp)
 add_executable(comm_node src/comm.cpp)
+add_executable(RTSP_node src/commRTSP.cpp)
 # add_executable(555_node src/tes555.cpp)
 
 ## Rename C++ executable without prefix
@@ -164,6 +165,11 @@ target_link_libraries(tes_node
   ${catkin_LIBRARIES}
 )
 target_link_libraries(comm_node
+  ${catkin_LIBRARIES}
+  flatbuffers
+)
+
+target_link_libraries(RTSP_node
   ${catkin_LIBRARIES}
   flatbuffers
 )

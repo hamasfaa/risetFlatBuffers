@@ -1,45 +1,22 @@
-#include <ros/ros.h>
-#include <robot/turtle_sim_generated.h>
-#include <flatbuffers/flatbuffers.h>
+#include <iostream>
+#include <cstring>
 #include <netinet/in.h>
-#include <stdio.h>
-#include <sys/socket.h>
 #include <unistd.h>
-#include "robot/PC2BS.h"
-#include "robot/BS2PC.h"
+#include <flatbuffers/flatbuffers.h>
+#include <robot/turtle_sim_generated.h>
 
-#define PORT 9898
+#define PORT 12345
 
-float xTurtle, yTurtle, thetaTurtle;
-
-ros::Publisher pubBS2PC;
-
-int client_socket = -1;
-ros::Timer timer;
-
-void pc2bsCallback(const robot::PC2BS::ConstPtr &msg)
+void sendFlatBuffer(int client_socket)
 {
-    xTurtle = msg->x;
-    yTurtle = msg->y;
-    thetaTurtle = msg->theta;
-    // printf("DARI ROSSSSSSS xTurtle: %f, yTurtle: %f, thetaTurtle: %f\n", xTurtle, yTurtle, thetaTurtle);
-}
-
-void sendComm(const ros::TimerEvent &)
-{
-    if (client_socket == -1)
-    {
-        ROS_WARN("Client socket belum terhubung.");
-        return;
-    }
-
+    // Serialize FlatBuffer data
     flatbuffers::FlatBufferBuilder builder;
 
+    // Create turtle status with dummy values
     TurtleSim::TurtleStatusBuilder tsb(builder);
-    tsb.add_x(xTurtle);
-    tsb.add_y(yTurtle);
-    tsb.add_theta(thetaTurtle);
-    // printf("[C++] Sending: x: %f, y: %f, theta: %f\n", xTurtle, yTurtle, thetaTurtle);
+    tsb.add_x(1.0);
+    tsb.add_y(2.0);
+    tsb.add_theta(3.0);
     auto ts = tsb.Finish();
 
     builder.Finish(ts);
@@ -47,56 +24,66 @@ void sendComm(const ros::TimerEvent &)
     uint8_t *buf = builder.GetBufferPointer();
     int size = builder.GetSize();
 
+    // Send FlatBuffer data
     send(client_socket, buf, size, 0);
 }
 
-void handleClient(const ros::TimerEvent &)
+void handleClient(int client_socket)
 {
-    if (client_socket == -1)
-    {
-        ROS_WARN("Tidak ada koneksi client yang aktif.");
-        return;
-    }
-
     char buffer[1024];
-    int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
+    int bytes_received;
 
-    if (bytes_received > 0)
+    // Simulate RTSP-like commands
+    printf("Handling client\n");
+    while ((bytes_received = recv(client_socket, buffer, sizeof(buffer), 0)) > 0)
     {
         std::string command(buffer, bytes_received);
         std::cout << "Received command: " << command << std::endl;
 
+        // Pastikan ada terminasi baris baru
         if (command.find("SETUP") != std::string::npos)
         {
+            // Setup command: Do any necessary initialization (if needed)
             std::string setup_response = "RTSP/1.0 200 OK\r\n";
             send(client_socket, setup_response.c_str(), setup_response.size(), 0);
         }
         else if (command.find("PLAY") != std::string::npos)
         {
-            sendComm(ros::TimerEvent());
+            // PLAY command: Send FlatBuffer data
+            sendFlatBuffer(client_socket);
         }
         else if (command.find("PAUSE") != std::string::npos)
         {
+            // PAUSE command: Pause the stream (simulated, no action here)
             std::string pause_response = "RTSP/1.0 200 OK\r\n";
             send(client_socket, pause_response.c_str(), pause_response.size(), 0);
         }
         else if (command.find("TEARDOWN") != std::string::npos)
         {
+            // TEARDOWN command: Close the session
             std::string teardown_response = "RTSP/1.0 200 OK\r\n";
             send(client_socket, teardown_response.c_str(), teardown_response.size(), 0);
-            close(client_socket);
-            client_socket = -1;
+            break; // Exit the loop after handling TEARDOWN
+        }
+        else
+        {
+            // Unknown command
+            std::string error_response = "RTSP/1.0 400 Bad Request\r\n";
+            send(client_socket, error_response.c_str(), error_response.size(), 0);
         }
     }
+
+    close(client_socket);
 }
 
-void startServer()
+int main()
 {
+    // Create a TCP socket
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1)
     {
         std::cerr << "Error creating socket" << std::endl;
-        return;
+        return -1;
     }
 
     struct sockaddr_in address;
@@ -107,43 +94,27 @@ void startServer()
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
         std::cerr << "Bind failed" << std::endl;
-        return;
+        return -1;
     }
 
     if (listen(server_fd, 3) < 0)
     {
         std::cerr << "Listen failed" << std::endl;
-        return;
+        return -1;
     }
 
     std::cout << "Waiting for connection..." << std::endl;
 
-    client_socket = accept(server_fd, NULL, NULL);
+    int client_socket = accept(server_fd, NULL, NULL);
     if (client_socket < 0)
     {
         std::cerr << "Accept failed" << std::endl;
-        return;
+        return -1;
     }
 
-    std::cout << "Client connected." << std::endl;
-}
+    // Handle the client
+    handleClient(client_socket);
 
-int main(int argc, char **argv)
-{
-    ros::init(argc, argv, "rtsp");
-    ros::NodeHandle nh;
-
-    pubBS2PC = nh.advertise<robot::BS2PC>("bs2pc_topic", 1);
-    ros::Subscriber subPC2BS = nh.subscribe<robot::PC2BS>("pc2bs_topic", 1, pc2bsCallback);
-
-    startServer();
-
-    timer = nh.createTimer(ros::Duration(0.02), handleClient);
-
-    ros::Timer send_timer = nh.createTimer(ros::Duration(0.02), sendComm);
-
-    ros::spin();
-
-    close(client_socket);
+    close(server_fd);
     return 0;
 }

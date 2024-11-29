@@ -8,7 +8,7 @@
 #include "robot/PC2BS.h"
 #include "robot/BS2PC.h"
 
-#define PORT 9898
+#define PORT 8554
 
 float xTurtle, yTurtle, thetaTurtle;
 
@@ -17,19 +17,21 @@ ros::Publisher pubBS2PC;
 int client_socket = -1;
 ros::Timer timer;
 
+bool isStreaming = false;
+
 void pc2bsCallback(const robot::PC2BS::ConstPtr &msg)
 {
     xTurtle = msg->x;
     yTurtle = msg->y;
     thetaTurtle = msg->theta;
-    // printf("DARI ROSSSSSSS xTurtle: %f, yTurtle: %f, thetaTurtle: %f\n", xTurtle, yTurtle, thetaTurtle);
+    printf("DARI ROSSSSSSS xTurtle: %f, yTurtle: %f, thetaTurtle: %f\n", xTurtle, yTurtle, thetaTurtle);
 }
 
-void sendComm(const ros::TimerEvent &)
+void sendComm()
 {
-    if (client_socket == -1)
+    if (client_socket == -1 || !isStreaming)
     {
-        ROS_WARN("Client socket belum terhubung.");
+        // Jika tidak ada koneksi atau streaming belum aktif, keluar
         return;
     }
 
@@ -50,7 +52,7 @@ void sendComm(const ros::TimerEvent &)
     send(client_socket, buf, size, 0);
 }
 
-void handleClient(const ros::TimerEvent &)
+void handleClient()
 {
     if (client_socket == -1)
     {
@@ -64,7 +66,6 @@ void handleClient(const ros::TimerEvent &)
     if (bytes_received > 0)
     {
         std::string command(buffer, bytes_received);
-        std::cout << "Received command: " << command << std::endl;
 
         if (command.find("SETUP") != std::string::npos)
         {
@@ -73,15 +74,19 @@ void handleClient(const ros::TimerEvent &)
         }
         else if (command.find("PLAY") != std::string::npos)
         {
-            sendComm(ros::TimerEvent());
+            isStreaming = true;
+            std::string play_response = "RTSP/1.0 200 OK\r\n";
+            send(client_socket, play_response.c_str(), play_response.size(), 0);
         }
         else if (command.find("PAUSE") != std::string::npos)
         {
+            isStreaming = false;
             std::string pause_response = "RTSP/1.0 200 OK\r\n";
             send(client_socket, pause_response.c_str(), pause_response.size(), 0);
         }
         else if (command.find("TEARDOWN") != std::string::npos)
         {
+            isStreaming = false;
             std::string teardown_response = "RTSP/1.0 200 OK\r\n";
             send(client_socket, teardown_response.c_str(), teardown_response.size(), 0);
             close(client_socket);
@@ -138,9 +143,11 @@ int main(int argc, char **argv)
 
     startServer();
 
-    timer = nh.createTimer(ros::Duration(0.02), handleClient);
+    ros::Timer timer = nh.createTimer(ros::Duration(0.02), [&](const ros::TimerEvent &)
+                                      { handleClient(); });
 
-    ros::Timer send_timer = nh.createTimer(ros::Duration(0.02), sendComm);
+    ros::Timer send_timer = nh.createTimer(ros::Duration(0.02), [&](const ros::TimerEvent &)
+                                           { sendComm(); });
 
     ros::spin();
 

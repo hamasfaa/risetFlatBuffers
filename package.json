@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "@grpc/grpc-js": "^1.12.2",
-    "flatbuffers": "^24.3.25"
+    "flatbuffers": "^24.3.25",
+    "gstreamer-superficial": "^1.7.4"
   }
 }

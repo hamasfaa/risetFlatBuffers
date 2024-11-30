@@ -1,51 +1,27 @@
-const net = require('net');
+const dgram = require('dgram');
 const flatbuffers = require('flatbuffers');
-const turtleSim = require('./turtle_sim').TurtleSim;
+const TurtleSim = require('./turtle_sim').TurtleSim;
 
-const PORT = 8554;
+// Create UDP socket to receive data
+const PORT = 5000;
 const HOST = '127.0.0.1';
+const socket = dgram.createSocket('udp4');
 
-const client = new net.Socket();
+socket.on('message', (msg) => {
+    // Create ByteBuffer from received message
+    const byteBuffer = new flatbuffers.ByteBuffer(new Uint8Array(msg));
 
-client.connect(PORT, HOST, () => {
-    console.log('Connected to server');
-    client.write('SETUP\r\n');
+    // Deserialize the data using FlatBuffers
+    const turtleStatus = TurtleSim.TurtleStatus.getRootAsTurtleStatus(byteBuffer);
+
+    // Extract values
+    const x = turtleStatus.x();
+    const y = turtleStatus.y();
+    const theta = turtleStatus.theta();
+
+    console.log(`Received Turtle Status: x = ${x}, y = ${y}, theta = ${theta}`);
 });
 
-client.on('data', (data) => {
-    const buf = new flatbuffers.ByteBuffer(new Uint8Array(data));
-
-    if (data.toString().includes("RTSP/1.0 200 OK")) {
-        console.log('Received RTSP OK response');
-
-        client.write('PLAY\r\n');
-    } else {
-        const turtleStatus = turtleSim.TurtleStatus.getRootAsTurtleStatus(buf);
-
-        let x = turtleStatus.x();
-        let y = turtleStatus.y();
-        let theta = turtleStatus.theta();
-
-        console.log(`Received turtle status:`);
-        console.log(`X: ${x}`);
-        console.log(`Y: ${y}`);
-        console.log(`Theta: ${theta}`);
-
-        // client.write('TEARDOWN\r\n');
-    }
-});
-
-process.stdin.resume();
-process.stdin.on('data', (input) => {
-    const command = input.toString().trim();
-    if (command == 'quit') {
-        console.log('Quitting...');
-        client.write('TEARDOWN\r\n');
-        client.end();
-        process.exit();
-    }
-});
-
-client.on('close', () => {
-    console.log('Connection closed');
+socket.bind(PORT, HOST, () => {
+    console.log(`UDP server listening on ${HOST}:${PORT}`);
 });

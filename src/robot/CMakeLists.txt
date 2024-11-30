@@ -16,6 +16,10 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
+pkg_check_modules(GSTREAMER_BASE REQUIRED gstreamer-base-1.0)
+
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -126,7 +130,12 @@ include
   # ${LIVE555_DIR}/UsageEnvironment
   # ${LIVE555_DIR}/groupsock
   # ${LIVE555_DIR}/BasicUsageEnvironment
+  ${GSTREAMER_INCLUDE_DIRS}
 )
+
+link_directories(${GSTREAMER_LIBRARY_DIRS})
+
+add_definitions(${GSTREAMER_CFLAGS_OTHER})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
@@ -172,6 +181,7 @@ target_link_libraries(comm_node
 target_link_libraries(RTSP_node
   ${catkin_LIBRARIES}
   flatbuffers
+  ${GSTREAMER_LIBRARIES}
 )
 
 # target_link_libraries(555_node

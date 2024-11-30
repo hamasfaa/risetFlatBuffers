@@ -1,156 +1,74 @@
-#include <ros/ros.h>
-#include <robot/turtle_sim_generated.h>
+#include <gst/gst.h>
 #include <flatbuffers/flatbuffers.h>
-#include <netinet/in.h>
-#include <stdio.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include "robot/PC2BS.h"
-#include "robot/BS2PC.h"
+#include <robot/turtle_sim_generated.h>
 
-#define PORT 8554
-
-float xTurtle, yTurtle, thetaTurtle;
-
-ros::Publisher pubBS2PC;
-
-int client_socket = -1;
-ros::Timer timer;
-
-bool isStreaming = false;
-
-void pc2bsCallback(const robot::PC2BS::ConstPtr &msg)
+void send_flatbuffer_data(float xTurtle, float yTurtle, float thetaTurtle)
 {
-    xTurtle = msg->x;
-    yTurtle = msg->y;
-    thetaTurtle = msg->theta;
-    printf("DARI ROSSSSSSS xTurtle: %f, yTurtle: %f, thetaTurtle: %f\n", xTurtle, yTurtle, thetaTurtle);
-}
+    // Initialize GStreamer
+    gst_init(nullptr, nullptr);
 
-void sendComm()
-{
-    if (client_socket == -1 || !isStreaming)
+    // Create pipeline
+    GstElement *pipeline = gst_pipeline_new("udp-pipeline");
+    GstElement *appsrc = gst_element_factory_make("appsrc", "appsrc");
+    GstElement *udpsink = gst_element_factory_make("udpsink", "udpsink");
+
+    if (!pipeline || !appsrc || !udpsink)
     {
-        // Jika tidak ada koneksi atau streaming belum aktif, keluar
+        g_printerr("Failed to create GStreamer elements.\n");
         return;
     }
 
-    flatbuffers::FlatBufferBuilder builder;
+    // Set udpsink properties
+    g_object_set(udpsink, "host", "127.0.0.1", "port", 5000, nullptr);
 
+    // Add elements to pipeline
+    gst_bin_add_many(GST_BIN(pipeline), appsrc, udpsink, nullptr);
+    if (!gst_element_link(appsrc, udpsink))
+    {
+        g_printerr("Failed to link elements.\n");
+        gst_object_unref(pipeline);
+        return;
+    }
+
+    // Create FlatBuffer data
+    flatbuffers::FlatBufferBuilder builder;
     TurtleSim::TurtleStatusBuilder tsb(builder);
     tsb.add_x(xTurtle);
     tsb.add_y(yTurtle);
     tsb.add_theta(thetaTurtle);
-    // printf("[C++] Sending: x: %f, y: %f, theta: %f\n", xTurtle, yTurtle, thetaTurtle);
     auto ts = tsb.Finish();
-
     builder.Finish(ts);
 
+    // Get pointer to serialized buffer
     uint8_t *buf = builder.GetBufferPointer();
-    int size = builder.GetSize();
+    size_t size = builder.GetSize();
 
-    send(client_socket, buf, size, 0);
+    // Create a GStreamer buffer
+    GstBuffer *gst_buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
+    gst_buffer_fill(gst_buffer, 0, buf, size);
+
+    // Push buffer to appsrc
+    GstFlowReturn ret;
+    g_signal_emit_by_name(appsrc, "push-buffer", gst_buffer, &ret);
+
+    if (ret != GST_FLOW_OK)
+    {
+        g_printerr("Failed to push buffer to appsrc.\n");
+    }
+
+    // Clean up
+    gst_buffer_unref(gst_buffer);
+    gst_element_set_state(pipeline, GST_STATE_PLAYING);
+
+    // Wait to let the data be sent
+    g_usleep(1000000); // Sleep for 1 second
+
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    gst_object_unref(pipeline);
 }
 
-void handleClient()
+int main()
 {
-    if (client_socket == -1)
-    {
-        ROS_WARN("Tidak ada koneksi client yang aktif.");
-        return;
-    }
-
-    char buffer[1024];
-    int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
-
-    if (bytes_received > 0)
-    {
-        std::string command(buffer, bytes_received);
-
-        if (command.find("SETUP") != std::string::npos)
-        {
-            std::string setup_response = "RTSP/1.0 200 OK\r\n";
-            send(client_socket, setup_response.c_str(), setup_response.size(), 0);
-        }
-        else if (command.find("PLAY") != std::string::npos)
-        {
-            isStreaming = true;
-            std::string play_response = "RTSP/1.0 200 OK\r\n";
-            send(client_socket, play_response.c_str(), play_response.size(), 0);
-        }
-        else if (command.find("PAUSE") != std::string::npos)
-        {
-            isStreaming = false;
-            std::string pause_response = "RTSP/1.0 200 OK\r\n";
-            send(client_socket, pause_response.c_str(), pause_response.size(), 0);
-        }
-        else if (command.find("TEARDOWN") != std::string::npos)
-        {
-            isStreaming = false;
-            std::string teardown_response = "RTSP/1.0 200 OK\r\n";
-            send(client_socket, teardown_response.c_str(), teardown_response.size(), 0);
-            close(client_socket);
-            client_socket = -1;
-        }
-    }
-}
-
-void startServer()
-{
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd == -1)
-    {
-        std::cerr << "Error creating socket" << std::endl;
-        return;
-    }
-
-    struct sockaddr_in address;
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
-
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
-    {
-        std::cerr << "Bind failed" << std::endl;
-        return;
-    }
-
-    if (listen(server_fd, 3) < 0)
-    {
-        std::cerr << "Listen failed" << std::endl;
-        return;
-    }
-
-    std::cout << "Waiting for connection..." << std::endl;
-
-    client_socket = accept(server_fd, NULL, NULL);
-    if (client_socket < 0)
-    {
-        std::cerr << "Accept failed" << std::endl;
-        return;
-    }
-
-    std::cout << "Client connected." << std::endl;
-}
-
-int main(int argc, char **argv)
-{
-    ros::init(argc, argv, "rtsp");
-    ros::NodeHandle nh;
-
-    pubBS2PC = nh.advertise<robot::BS2PC>("bs2pc_topic", 1);
-    ros::Subscriber subPC2BS = nh.subscribe<robot::PC2BS>("pc2bs_topic", 1, pc2bsCallback);
-
-    startServer();
-
-    ros::Timer timer = nh.createTimer(ros::Duration(0.02), [&](const ros::TimerEvent &)
-                                      { handleClient(); });
-
-    ros::Timer send_timer = nh.createTimer(ros::Duration(0.02), [&](const ros::TimerEvent &)
-                                           { sendComm(); });
-
-    ros::spin();
-
-    close(client_socket);
+    send_flatbuffer_data(1.0, 2.0, 3.14159);
     return 0;
 }

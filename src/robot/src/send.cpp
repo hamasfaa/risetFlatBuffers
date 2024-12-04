@@ -8,22 +8,22 @@ void send_flatbuffer_data(float xTurtle, float yTurtle, float thetaTurtle)
     gst_init(nullptr, nullptr);
 
     // Create pipeline
-    GstElement *pipeline = gst_pipeline_new("udp-pipeline");
+    GstElement *pipeline = gst_pipeline_new("rtsp-pipeline");
     GstElement *appsrc = gst_element_factory_make("appsrc", "appsrc");
-    GstElement *udpsink = gst_element_factory_make("udpsink", "udpsink");
+    GstElement *rtspclientsink = gst_element_factory_make("rtspclientsink", "rtspclientsink");
 
-    if (!pipeline || !appsrc || !udpsink)
+    if (!pipeline || !appsrc || !rtspclientsink)
     {
         g_printerr("Failed to create GStreamer elements.\n");
         return;
     }
 
-    // Set udpsink properties
-    g_object_set(udpsink, "host", "127.0.0.1", "port", 5000, nullptr);
+    // Set rtspclientsink properties
+    g_object_set(rtspclientsink, "location", "rtsp://127.0.0.1:8554/stream", nullptr);
 
     // Add elements to pipeline
-    gst_bin_add_many(GST_BIN(pipeline), appsrc, udpsink, nullptr);
-    if (!gst_element_link(appsrc, udpsink))
+    gst_bin_add_many(GST_BIN(pipeline), appsrc, rtspclientsink, nullptr);
+    if (!gst_element_link(appsrc, rtspclientsink))
     {
         g_printerr("Failed to link elements.\n");
         gst_object_unref(pipeline);

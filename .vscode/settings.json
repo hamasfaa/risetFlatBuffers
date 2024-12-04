@@ -9,6 +9,7 @@
     "files.associations": {
         "haskell": "haskell",
         "*.c": "c",
-        "*.ipp": "cpp"
+        "*.ipp": "cpp",
+        "cstdio": "cpp"
     }
 }

@@ -10,8 +10,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@grpc/grpc-js": "^1.12.2",
+    "@grpc/grpc-js": "^1.12.3",
     "flatbuffers": "^24.3.25",
-    "gstreamer-superficial": "^1.7.4"
+    "gstreamer-superficial": "^1.7.4",
+    "node-rtsp-stream": "^0.0.9",
+    "zeromq": "^6.1.2"
   }
 }

@@ -1,80 +1,98 @@
 #include <gst/gst.h>
-#include <gst/app/gstappsrc.h>
-#include <cstring>
-#include <vector>
+#include <gst/rtsp-server/rtsp-server.h>
+#include <gst/rtsp-server/rtsp-media-factory.h>
+#include <stdio.h>
 
-GstBuffer *text_to_buffer(const char *text)
+static GstElement *pipeline;
+static GstElement *video_source, *x264enc, *rtph264pay, *udp_sink;
+static GstRTSPServer *server;
+static GstRTSPMediaFactory *factory;
+
+static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data)
 {
-    int size = strlen(text);
-    GstBuffer *buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
-    GstMapInfo map;
-    gst_buffer_map(buffer, &map, GST_MAP_WRITE);
-    memcpy(map.data, text, size);
-    gst_buffer_unmap(buffer, &map);
-    return buffer;
+    switch (GST_MESSAGE_TYPE(msg))
+    {
+    case GST_MESSAGE_ERROR:
+    {
+        gchar *debug;
+        GError *err;
+        gst_message_parse_error(msg, &err, &debug);
+        g_free(debug);
+        g_error_free(err);
+        break;
+    }
+    default:
+        break;
+    }
+    return TRUE;
 }
 
-void push_data(GstElement *appsrc, const char *text)
+static GstPadProbeReturn probe_callback(GstPad *pad, GstPadProbeInfo *info, gpointer user_data)
 {
-    GstBuffer *buffer = text_to_buffer(text);
-    GstFlowReturn ret;
-    g_signal_emit_by_name(appsrc, "push-buffer", buffer, &ret);
-    gst_buffer_unref(buffer);
+    // Sisipkan metadata dalam paket video
+    static guint8 metadata[256];
+    static int metadata_len = 0;
+    if (metadata_len == 0)
+    {
+        // Menyisipkan "hello world" dalam metadata
+        metadata_len = snprintf((char *)metadata, sizeof(metadata), "hello world");
+    }
 
-    if (ret != GST_FLOW_OK)
-    {
-        g_printerr("Failed to push buffer to appsrc\n");
-    }
-    else
-    {
-        g_print("Payload pushed\n");
-    }
+    // Mengirim metadata ke dalam stream, misalnya ke buffer
+    GstBuffer *buffer = gst_buffer_new_and_alloc(metadata_len);
+    gst_buffer_fill(buffer, 0, metadata, metadata_len);
+    gst_pad_push(pad, buffer);
+
+    return GST_PAD_PROBE_OK;
 }
 
 int main(int argc, char *argv[])
 {
     gst_init(&argc, &argv);
 
-    GstElement *pipeline = gst_pipeline_new("transmitter-pipeline");
-    GstElement *appsrc = gst_element_factory_make("appsrc", "source");
-    GstElement *queue = gst_element_factory_make("queue", "queue");
-    GstElement *udpsink = gst_element_factory_make("udpsink", "sink");
+    // Membuat RTSP server
+    server = gst_rtsp_server_new();
+    gst_rtsp_server_attach(server, NULL);
 
-    if (!pipeline || !appsrc || !queue || !udpsink)
-    {
-        g_printerr("Failed to create elements\n");
-        return -1;
-    }
+    // Membuat pipeline GStreamer
+    video_source = gst_element_factory_make("videotestsrc", "video_source");
+    x264enc = gst_element_factory_make("x264enc", "x264enc");
+    rtph264pay = gst_element_factory_make("rtph264pay", "rtph264pay");
+    udp_sink = gst_element_factory_make("udpsink", "udp_sink");
 
-    // Konfigurasi elemen
-    g_object_set(G_OBJECT(udpsink), "host", "127.0.0.1", "port", 5000, nullptr);
+    pipeline = gst_pipeline_new("video_pipeline");
+    gst_bin_add_many(GST_BIN(pipeline), video_source, x264enc, rtph264pay, udp_sink, NULL);
+    gst_element_link_many(video_source, x264enc, rtph264pay, udp_sink, NULL);
 
-    // Tambahkan elemen ke pipeline
-    gst_bin_add_many(GST_BIN(pipeline), appsrc, queue, udpsink, nullptr);
+    // Mengatur properti pipeline
+    g_object_set(udp_sink, "host", "127.0.0.1", NULL);
+    g_object_set(udp_sink, "port", 5000, NULL);
 
-    // Hubungkan elemen
-    if (!gst_element_link_many(appsrc, queue, udpsink, nullptr))
-    {
-        g_printerr("Failed to link appsrc, queue, and udpsink\n");
-        return -1;
-    }
+    // Menambahkan probe untuk menyisipkan metadata
+    GstPad *pad = gst_element_get_static_pad(rtph264pay, "src");
+    gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER, probe_callback, NULL, NULL);
 
-    // Konfigurasi appsrc
-    GstCaps *caps = gst_caps_new_simple(
-        "application/x-raw",
-        "media", G_TYPE_STRING, "text",
-        nullptr);
-    g_object_set(G_OBJECT(appsrc), "caps", caps, nullptr);
-    gst_caps_unref(caps);
-
+    // Menjalankan pipeline
     gst_element_set_state(pipeline, GST_STATE_PLAYING);
 
-    const char *text = "Yuke ganteng banget anjiay";
-    push_data(appsrc, text);
+    // Membuat factory untuk stream RTSP
+    factory = gst_rtsp_media_factory_new();
+    gst_rtsp_media_factory_set_launch(factory, "( videotestsrc ! x264enc ! rtph264pay pt=96 name=pay0 )");
 
-    g_usleep(5000000); // Tunggu 5 detik
+    // Menambahkan factory ke server RTSP
+    GstRTSPMountPoints *mounts = gst_rtsp_server_get_mount_points(server);
+    gst_rtsp_mount_points_add_factory(mounts, "/test", factory);
+
+    // Menunggu koneksi
+    g_print("RTSP server is running at rtsp://127.0.0.1:8554/test\n");
+    gst_rtsp_server_attach(server, NULL);
+
+    // Menunggu input dan menutup server jika diperlukan
+    g_main_loop_run(g_main_loop_new(NULL, FALSE));
+
     gst_element_set_state(pipeline, GST_STATE_NULL);
     gst_object_unref(pipeline);
+    gst_object_unref(server);
 
     return 0;
 }

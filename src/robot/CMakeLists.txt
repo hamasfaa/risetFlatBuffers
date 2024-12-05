@@ -64,8 +64,9 @@ add_definitions(${GSTREAMER_CFLAGS_OTHER})
 # Add executable targets
 add_executable(tes_node src/tes.cpp)
 add_executable(comm_node src/comm.cpp)
-add_executable(RTSP_node src/commRTSP.cpp)
-add_executable(recvRTSP_node src/recvRTSP.cpp)
+# add_executable(RTSP_node src/commRTSP.cpp)
+# add_executable(recvRTSP_node src/recvRTSP.cpp)
+add_executable(zero_node src/zeroMq.cpp)
 # add_executable(555_node src/tes555.cpp)
 
 # Link libraries for each executable
@@ -78,20 +79,26 @@ target_link_libraries(comm_node
   flatbuffers
 )
 
-target_link_libraries(RTSP_node
-  ${catkin_LIBRARIES}
-  flatbuffers
-  ${GSTREAMER_LIBRARIES}
-  ${GSTREAMER_RTSP_LIBRARIES}
-  ${GSTREAMER_APP_LIBRARIES}
-)
+# target_link_libraries(RTSP_node
+#   ${catkin_LIBRARIES}
+#   flatbuffers
+#   ${GSTREAMER_LIBRARIES}
+#   ${GSTREAMER_RTSP_LIBRARIES}
+#   ${GSTREAMER_APP_LIBRARIES}
+# )
 
-target_link_libraries(recvRTSP_node
+# target_link_libraries(recvRTSP_node
+#   ${catkin_LIBRARIES}
+#   flatbuffers
+#   ${GSTREAMER_LIBRARIES}
+#   ${GSTREAMER_RTSP_LIBRARIES}
+#   ${GSTREAMER_APP_LIBRARIES}
+# )
+
+target_link_libraries(zero_node
   ${catkin_LIBRARIES}
+  zmq
   flatbuffers
-  ${GSTREAMER_LIBRARIES}
-  ${GSTREAMER_RTSP_LIBRARIES}
-  ${GSTREAMER_APP_LIBRARIES}
 )
 # Link Live555 libraries
 # target_link_libraries(555_node

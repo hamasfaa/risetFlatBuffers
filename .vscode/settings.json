@@ -10,6 +10,10 @@
         "haskell": "haskell",
         "*.c": "c",
         "*.ipp": "cpp",
-        "cstdio": "cpp"
+        "cstdio": "cpp",
+        "array": "cpp",
+        "string": "cpp",
+        "string_view": "cpp",
+        "span": "cpp"
     }
 }

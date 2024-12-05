@@ -13,8 +13,7 @@
                 "${workspaceFolder}/src/**",
                 "${workspaceFolder}/build/**",
                 "${workspaceFolder}/devel/include/**",
-                "${workspaceFolder}/devel/lib/**",
-                "/usr/local/include/liveMedia"
+                "${workspaceFolder}/devel/lib/**"
             ],
             "name": "ROS",
             "intelliSenseMode": "gcc-x64",

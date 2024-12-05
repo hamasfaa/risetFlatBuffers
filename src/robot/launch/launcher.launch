@@ -1,7 +1,8 @@
 <launch>
     <!-- <node name="turtle" pkg="turtlesim" type="turtlesim_node" output="screen"/>
-    <node name="tes" pkg="robot" type="tes_node" output="screen"/> -->
-    <!-- <node name="comm" pkg="robot" type="comm_node" output="screen"/> -->
-    <node name="rtsp" pkg="robot" type="RTSP_node" output="screen"/>
+    <node name="tes" pkg="robot" type="tes_node" output="screen"/>
+    <node name="comm" pkg="robot" type="comm_node" output="screen"/> -->
+    <!-- <node name="rtsp" pkg="robot" type="RTSP_node" output="screen"/> -->
     <!-- <node name="controller" pkg="turtlesim" type="turtle_teleop_key" output="screen"/> -->
+    <node name="zero" pkg="robot" type="zero_node" output="screen"/>
 </launch>

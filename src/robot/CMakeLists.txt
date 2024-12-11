@@ -77,6 +77,7 @@ target_link_libraries(tes_node
 target_link_libraries(comm_node
   ${catkin_LIBRARIES}
   flatbuffers
+  zmq
 )
 
 # target_link_libraries(RTSP_node

@@ -13,7 +13,8 @@
                 "${workspaceFolder}/src/**",
                 "${workspaceFolder}/build/**",
                 "${workspaceFolder}/devel/include/**",
-                "${workspaceFolder}/devel/lib/**"
+                "${workspaceFolder}/devel/lib/**",
+                "/usr/lib/**"
             ],
             "name": "ROS",
             "intelliSenseMode": "gcc-x64",
